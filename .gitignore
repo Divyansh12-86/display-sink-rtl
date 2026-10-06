@@ -1,0 +1,9 @@
+# Ignore simulation build and wave artifacts
+work/
+transcript
+vsim.wlf
+*.vcd
+*.vpd
+*.fsdb
+obj_dir/
+.vscode/
