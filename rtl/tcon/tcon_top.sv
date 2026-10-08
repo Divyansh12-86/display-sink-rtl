@@ -10,11 +10,13 @@
 module tcon_top
   import display_pkg::*;
 (
-  input  logic        clk,
-  input  logic        rst_n,
-  input  res_mode_e   res_mode,
-  input  rate_mode_e  rate_mode,
-  input  logic        enable,
+  input  logic          clk,
+  input  logic          rst_n,
+  input  res_mode_e     res_mode,
+  input  rate_mode_e    rate_mode,
+  input  pattern_mode_e pat_mode,
+  input  logic [23:0]   ext_video_rgb,
+  input  logic          enable,
 
   // Stream status
   output logic        pixel_en,
@@ -90,10 +92,12 @@ module tcon_top
     .de          (cur_de),
     .vsync       (cur_vsync),
     .frame_count (cur_frame),
-    .res_mode    (res_mode),
-    .pixel_r     (rgb_r),
-    .pixel_g     (rgb_g),
-    .pixel_b     (rgb_b)
+    .res_mode      (res_mode),
+    .pat_mode      (pat_mode),
+    .ext_video_rgb (ext_video_rgb),
+    .pixel_r       (rgb_r),
+    .pixel_g       (rgb_g),
+    .pixel_b       (rgb_b)
   );
 
 endmodule : tcon_top

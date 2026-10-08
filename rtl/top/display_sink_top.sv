@@ -18,12 +18,14 @@ module display_sink_top
   input  logic        enable,       // Global raster enable
 
   // Mode & Configuration Controls
-  input  res_mode_e   res_mode,     // 480p, 720p, 1080p
-  input  rate_mode_e  rate_mode,    // 24Hz, 30Hz, 45Hz, 60Hz
-  input  logic        ext_video_sel,// 0 = Internal Live Motion, 1 = External AXI-Stream
-  input  logic        csc_enable,   // 0 = RGB Bypass, 1 = YCbCr -> RGB
-  input  logic [1:0]  gamma_mode,   // 0 = Bypass, 1 = Gamma 2.2, 2 = sRGB
-  input  logic        dither_enable,// 0 = Bypass, 1 = Dither ON
+  input  res_mode_e     res_mode,     // 480p, 720p, 1080p
+  input  rate_mode_e    rate_mode,    // 24Hz, 30Hz, 45Hz, 60Hz
+  input  pattern_mode_e pat_mode,     // 0..3: Built-in Patterns, 4: Video1, 5: Video2
+  input  logic [23:0]   ext_video_rgb,// External frame pixel data for Video1/Video2
+  input  logic          ext_video_sel,// 0 = Internal Pattern/Video, 1 = External AXI-Stream
+  input  logic          csc_enable,   // 0 = RGB Bypass, 1 = YCbCr -> RGB
+  input  logic [1:0]    gamma_mode,   // 0 = Bypass, 1 = Gamma 2.2, 2 = sRGB
+  input  logic          dither_enable,// 0 = Bypass, 1 = Dither ON
 
   // External AXI4-Stream Video In
   input  logic [23:0] s_axis_tdata,
@@ -39,6 +41,11 @@ module display_sink_top
   output logic        panel_de,
   output logic        panel_hsync,
   output logic        panel_vsync,
+
+  // Current Raster Coordinates (Direct access for emulator / OSD)
+  output logic [11:0] cur_pixel_x,
+  output logic [11:0] cur_pixel_y,
+  output logic        cur_pixel_en,
 
   // Panel Physical Control Strobes
   output logic        stv,          // Start Pulse Vertical (Frame start)
@@ -84,19 +91,25 @@ module display_sink_top
   // ---------------------------------------------------------------------------
   logic [7:0] live_r, live_g, live_b;
 
+  assign cur_pixel_x  = pixel_x;
+  assign cur_pixel_y  = pixel_y;
+  assign cur_pixel_en = pixel_en;
+
   pattern_generator_live u_pattern_live (
-    .clk         (clk),
-    .rst_n       (rst_n),
-    .pixel_en    (pixel_en),
-    .pixel_x     (pixel_x),
-    .pixel_y     (pixel_y),
-    .de          (tcon_de),
-    .vsync       (tcon_vsync),
-    .frame_count (frame_count),
-    .res_mode    (res_mode),
-    .pixel_r     (live_r),
-    .pixel_g     (live_g),
-    .pixel_b     (live_b)
+    .clk           (clk),
+    .rst_n         (rst_n),
+    .pixel_en      (pixel_en),
+    .pixel_x       (pixel_x),
+    .pixel_y       (pixel_y),
+    .de            (tcon_de),
+    .vsync         (tcon_vsync),
+    .frame_count   (frame_count),
+    .res_mode      (res_mode),
+    .pat_mode      (pat_mode),
+    .ext_video_rgb (ext_video_rgb),
+    .pixel_r       (live_r),
+    .pixel_g       (live_g),
+    .pixel_b       (live_b)
   );
 
   // ---------------------------------------------------------------------------

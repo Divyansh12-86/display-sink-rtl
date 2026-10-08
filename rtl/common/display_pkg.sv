@@ -27,6 +27,15 @@ package display_pkg;
     RATE_60HZ = 2'b11
   } rate_mode_e;
 
+  typedef enum logic [2:0] {
+    PAT_COLORBARS = 3'b000, // Standard SMPTE / EBU Multi-Color Bars
+    PAT_GRAYSCALE = 3'b001, // Dynamic 0-255 Horizontal Luminance Ramp
+    PAT_GEOMETRY  = 3'b010, // Alignment Grid & Corner Calibration Markers
+    PAT_MOTION    = 3'b011, // High-Velocity Animated Target & Smooth Waves
+    PAT_VIDEO1    = 3'b100, // Custom External User Video 1 (from media/video1/)
+    PAT_VIDEO2    = 3'b101  // Custom External User Video 2 (from media/video2/)
+  } pattern_mode_e;
+
   // ---------------------------------------------------------------------------
   // Timing Parameter Record Struct
   // ---------------------------------------------------------------------------
