@@ -61,6 +61,21 @@ sim-top:
 	@echo "==> [QUESTA] Running Master Regression simulation..."
 	$(VSIM) -c -do "run -all; quit" tb_top
 
+build-view:
+	@echo "==> [VERILATOR + SDL2] Compiling real-time interactive graphical viewer..."
+	$(VERILATOR) --cc --exe --build -j 4 \
+		-Wall -Wno-DECLFILENAME -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-UNUSEDSIGNAL \
+		-CFLAGS "$$(pkg-config --cflags sdl2) -O3 -std=c++17" \
+		-LDFLAGS "$$(pkg-config --libs sdl2)" \
+		-f files.f \
+		--top-module display_sink_top \
+		sdl_viewer/main_sdl.cpp \
+		-o display_viewer
+
+view: build-view
+	@echo "==> [LAUNCH] Launching interactive display window..."
+	./obj_dir/display_viewer
+
 wave:
 	@if [ -f tcon_waves.vcd ]; then \
 		gtkwave tcon_waves.vcd & \

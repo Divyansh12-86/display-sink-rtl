@@ -92,3 +92,136 @@ The controller supports dynamic switching between **12 distinct operating modes*
 | **1080p** | $1920 \times 1080$ | $2200 \times 1125$ | 59.40 MHz | 74.25 MHz | 111.375 MHz | **148.50 MHz** |
 
 *Driven synchronously at a 150 MHz system clock using an exact fractional accumulator rate generator.*
+
+---
+
+## 4. Interactive Live Emulator & 6-Mode Display System
+
+The project features a cycle-accurate graphical desktop emulator built with Verilator and SDL2 (`make view`). The emulator compiles the synthesizable SystemVerilog RTL directly into native C++ machine code and renders the panel outputs in real time.
+
+### 4.1 The 6 Togglable Display Modes
+
+The emulator supports **6 distinct display sources** that can be toggled at runtime:
+
+| Mode # | Keybinding | Display Source | Description |
+| :---: | :---: | :--- | :--- |
+| **1** | `F1` / `Keypad 1` | **SMPTE 8-Bar Color Bars** *(Default)* | Standard 75% broadcast calibration bars: White, Yellow, Cyan, Green, Magenta, Red, Blue, Black. Generated entirely inside synthesizable RTL (`pattern_generator_live.sv`). |
+| **2** | `F2` / `Keypad 2` | **0–255 Grayscale Ramp** | Smooth horizontal luminance ramp spanning pure black (`0x00`) to peak white (`0xFF`) across all active scanlines. |
+| **3** | `F3` / `Keypad 3` | **Calibration Geometry Grid** | 32-pixel spatial alignment grid with bright intersection crosshairs, dark blueprint background, and 16×16 red corner boundary reticles. |
+| **4** | `F4` / `Keypad 4` | **Animated Motion Target** | High-velocity bouncing physics sprite with dynamic wall reflection, sub-pixel velocity, and shifting sinusoidal background waves. |
+| **5** | `F5` / `Keypad 5` | **Custom User Video 1** | External video playback loaded from `media/video1/`. Processed through the hardware scaler, color converter, and gamma pipeline. |
+| **6** | `F6` / `Keypad 6` | **Custom User Video 2** | External video playback loaded from `media/video2/`. Processed through the hardware scaler, color converter, and gamma pipeline. |
+
+> **Cycle Key**: Pressing **`V`** or **`P`** cycles sequentially through all 6 modes (`1 → 2 → 3 → 4 → 5 → 6 → 1`).
+
+---
+
+## 5. Custom User Video Setup & Privacy Guarantee
+
+You can feed your own videos or image sequences into the hardware pipeline to test real-world scaling, color matrixing, and panel dithering.
+
+### 5.1 Privacy & Git Protection
+* **Dedicated folders**: Place your videos in `media/video1/` and `media/video2/`.
+* **Zero Repo Leaks**: `.gitignore` strictly excludes all video files (`*.mp4`, `*.avi`, `*.mkv`, `*.mov`, `*.gif`) and frame dumps (`media/video1/*`, `media/video2/*`). Only `.gitkeep` is tracked. **Your personal videos and frames will never be committed or uploaded.**
+
+### 5.2 Zero-Error / Missing Video Fallback
+* **Presence is optional**: If either `media/video1/` or `media/video2/` is empty, or only 1 video is provided, the system **never crashes or throws an error**.
+* **Graceful Fallback**: If an empty video slot is selected (e.g. pressing `F5` when `media/video1/` is empty), the emulator logs a helpful notice to the console and automatically displays **Default Pattern 1 (SMPTE Color Bars)**.
+
+### 5.3 Loading Videos with `scripts/load_video.py`
+
+A lightweight preprocessing tool [`scripts/load_video.py`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/scripts/load_video.py) is provided to prepare videos, animated GIFs, or image folders for the emulator:
+
+#### 1. Instant Demo Animations (No video files needed)
+Generate built-in animated radar/motion clips to test Slot 1 or Slot 2 immediately:
+```bash
+python3 scripts/load_video.py --demo 1   # Populates media/video1/
+python3 scripts/load_video.py --demo 2   # Populates media/video2/
+```
+
+#### 2. Load Animated GIFs
+Extract and scale frames from any animated GIF directly using Pillow:
+```bash
+python3 scripts/load_video.py my_animation.gif 1
+```
+
+#### 3. Load Image Sequences / Folders
+Feed a folder containing PNG, JPG, or BMP images:
+```bash
+python3 scripts/load_video.py path/to/my_frames/ 1
+```
+
+#### 4. Load Video Containers (MP4, AVI, MOV, MKV)
+If `ffmpeg` is installed on your system, the script extracts video frames directly:
+```bash
+python3 scripts/load_video.py my_video.mp4 1 --res 480p
+```
+*(If ffmpeg is not available, you can convert a short clip to animated GIF or an image folder, or run `--demo 1`)*.
+
+#### 5. Clear a Video Slot
+```bash
+python3 scripts/load_video.py --clear 1
+python3 scripts/load_video.py --clear 2
+```
+
+---
+
+## 6. Real-Time Interactive Keyboard Controls
+
+While running `make view`, the following hotkeys control the hardware pipeline in real time:
+
+```
+┌───────────────────────────────────────────────────────────────────────────────────┐
+│ DISPLAY SOURCE TOGGLES:                                                           │
+│   [F1] / [KP 1] : Mode 1 - SMPTE 8-Bar Color Bars (Hardware Built-in)             │
+│   [F2] / [KP 2] : Mode 2 - 0-255 Horizontal Grayscale Ramp (Hardware Built-in)   │
+│   [F3] / [KP 3] : Mode 3 - Calibration Geometry Grid (Hardware Built-in)          │
+│   [F4] / [KP 4] : Mode 4 - High-Velocity Animated Motion Target (Hardware Built)  │
+│   [F5] / [KP 5] : Mode 5 - Custom User Video 1 (media/video1/)                    │
+│   [F6] / [KP 6] : Mode 6 - Custom User Video 2 (media/video2/)                    │
+│   [V]  / [P]    : Cycle sequentially through all 6 display sources                │
+├───────────────────────────────────────────────────────────────────────────────────┤
+│ HARDWARE PIPELINE CONTROLS:                                                       │
+│   [1] : 480p Mode  (640x480 active, polyphase upscaled to 1080p panel)           │
+│   [2] : 720p Mode  (1280x720 active, polyphase upscaled to 1080p panel)           │
+│   [3] : 1080p Mode (Native 1920x1080 passthrough)                                 │
+│   [4] : 24 Hz Refresh Rate (Cinema Cadence)                                       │
+│   [5] : 30 Hz Refresh Rate                                                        │
+│   [6] : 45 Hz Refresh Rate                                                        │
+│   [7] : 60 Hz Refresh Rate (Smooth Motion)                                        │
+│   [C] : Toggle Color Space Conversion (RGB Bypass <-> BT.709 YCbCr)               │
+│   [G] : Cycle Gamma Mode (Linear -> Gamma 2.2 Curve -> sRGB Curve)                │
+│   [D] : Toggle Spatial/Temporal Dithering (Bayer 2x2 FRC)                         │
+│   [R] : Rescan & Reload custom video folders from disk                            │
+│   [ESC] / [Q] : Exit Emulator                                                     │
+└───────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 7. Verification & Simulation Targets
+
+Run verification suites from the `sim/` directory:
+
+```bash
+cd sim
+
+# 1. Run strict static linting (-Wall with zero warnings)
+make lint
+
+# 2. Run T-CON glass timing verification (CTA-861 & VESA timings)
+make sim-questa
+
+# 3. Run 2D polyphase scaler verification (480p/720p -> 1080p)
+make sim-scaler
+
+# 4. Run Color, Gamma LUT & Dither FRC verification
+make sim-color
+
+# 5. Run Master Top-Level end-to-end integration regression
+make sim-top
+
+# 6. Launch real-time SDL2 interactive graphical emulator
+make view
+```
+

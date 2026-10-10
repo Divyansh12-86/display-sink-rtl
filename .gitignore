@@ -7,3 +7,13 @@ vsim.wlf
 *.fsdb
 obj_dir/
 .vscode/
+
+# Ignore user custom video files and frame extractions
+media/video1/*
+!media/video1/.gitkeep
+media/video2/*
+!media/video2/.gitkeep
+media/*.mp4
+media/*.avi
+media/*.mkv
+media/*.mov
