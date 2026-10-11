@@ -1,31 +1,13 @@
 // =============================================================================
 // File: main_sdl.cpp
-// Description: Interactive Real-Time SDL2 Graphical Viewer for display-sink-rtl.
-//              Verilates the synthesizable SystemVerilog top-level design and
-//              renders active panel raster pixels directly into an SDL2 window.
-//
-// Display Modes (6 Toggles):
-//   [F1] / [Keypad 1] : Default Pattern 1 (SMPTE 8-Bar Color Bars)
-//   [F2] / [Keypad 2] : Default Pattern 2 (0-255 Horizontal Linear Grayscale Ramp)
-//   [F3] / [Keypad 3] : Default Pattern 3 (Calibration Geometry Grid & Markers)
-//   [F4] / [Keypad 4] : Default Pattern 4 (High-Velocity Animated Motion Target)
-//   [F5] / [Keypad 5] : Custom User Video 1 (Loaded from media/video1/)
-//   [F6] / [Keypad 6] : Custom User Video 2 (Loaded from media/video2/)
-//   [V]  / [P]        : Cycle through all 6 Display Modes sequentially
-//
-// Pipeline Controls:
-//   [1] : 480p Mode  (640x480 active, polyphase upscaled to 1080p panel)
-//   [2] : 720p Mode  (1280x720 active, polyphase upscaled to 1080p panel)
-//   [3] : 1080p Mode (Native 1920x1080 passthrough)
-//   [4] : 24 Hz Refresh Rate (Cinema Cadence)
-//   [5] : 30 Hz Refresh Rate
-//   [6] : 45 Hz Refresh Rate
-//   [7] : 60 Hz Refresh Rate (Smooth Motion)
-//   [C] : Toggle Color Space Conversion (RGB Bypass <-> BT.709 YCbCr)
-//   [G] : Cycle Gamma Mode (Linear -> Gamma 2.2 -> sRGB)
-//   [D] : Toggle Spatial/Temporal Dithering (FRC)
-//   [R] : Rescan & Reload Custom Video folders
-//   [ESC] / [Q] : Exit Viewer
+// Description: Real-Time Interactive Multi-Resolution & Rate Display Emulator.
+//              Features:
+//              - Native video resolution auto-detection (SD, HD, FHD, 2K, 4K)
+//              - Bidirectional hardware scaling (1:1 Native, Upscaling & Downscaling)
+//              - Zero-distortion multi-resolution dynamic texture management
+//              - High-speed real-time simulation engine (lag-free 60 FPS playback)
+//              - Cadence-accurate refresh rate pacing (24Hz, 30Hz, 45Hz, 60Hz)
+//              - 6 Togglable display sources with graceful empty-slot fallbacks
 // =============================================================================
 
 #include <iostream>
@@ -43,15 +25,11 @@
 
 namespace fs = std::filesystem;
 
-// Active panel physical dimensions (Native 1080p output panel)
-constexpr int PANEL_WIDTH  = 1920;
-constexpr int PANEL_HEIGHT = 1080;
-
-// Window presentation size (960x540 for responsive desktop viewing)
+// Window presentation viewport (Responsive 16:9 desktop presentation)
 constexpr int WIN_WIDTH  = 960;
 constexpr int WIN_HEIGHT = 540;
 
-// 6 Togglable Display Modes
+// 6 Togglable Display Sources
 enum DisplaySourceMode {
     MODE_COLORBARS = 0,
     MODE_GRAYSCALE = 1,
@@ -61,14 +39,14 @@ enum DisplaySourceMode {
     MODE_VIDEO2    = 5
 };
 
-// Decoded Single Video Frame
+// Decoded Video Frame Memory
 struct VideoFrame {
     int width = 0;
     int height = 0;
     std::vector<uint32_t> pixels; // 0x00RRGGBB
 };
 
-// Self-contained Video Player Slot (Reads PPM/BMP/RAW files)
+// Video Slot Handler with Native Resolution Recognition
 class VideoPlayer {
 public:
     std::string slot_name;
@@ -76,6 +54,11 @@ public:
     std::vector<VideoFrame> frames;
     size_t current_frame = 0;
     bool loaded = false;
+
+    int native_w = 0;
+    int native_h = 0;
+    std::string native_label = "None";
+    int native_res_mode = 1; // 0=480p, 1=720p, 2=1080p
 
     VideoPlayer(const std::string& name, const std::string& path)
         : slot_name(name), folder_path(path) {
@@ -86,6 +69,9 @@ public:
         frames.clear();
         current_frame = 0;
         loaded = false;
+        native_w = 0;
+        native_h = 0;
+        native_label = "None";
 
         if (!fs::exists(folder_path)) {
             return;
@@ -121,25 +107,52 @@ public:
 
         if (!frames.empty()) {
             loaded = true;
+            native_w = frames[0].width;
+            native_h = frames[0].height;
+
+            // Recognize native resolution standard
+            if (native_w == 640 && native_h == 480) {
+                native_label = "480p SD";
+                native_res_mode = 0;
+            } else if (native_w == 1280 && native_h == 720) {
+                native_label = "720p HD";
+                native_res_mode = 1;
+            } else if (native_w == 1920 && native_h == 1080) {
+                native_label = "1080p FHD";
+                native_res_mode = 2;
+            } else if (native_w == 2560 && native_h == 1440) {
+                native_label = "1440p 2K QHD";
+                native_res_mode = 2;
+            } else if (native_w == 3840 && native_h == 2160) {
+                native_label = "2160p 4K UHD";
+                native_res_mode = 2;
+            } else {
+                native_label = std::to_string(native_w) + "x" + std::to_string(native_h) + " Custom";
+                if (native_w <= 800) native_res_mode = 0;
+                else if (native_w <= 1400) native_res_mode = 1;
+                else native_res_mode = 2;
+            }
+
             std::cout << "[INFO] " << slot_name << ": Loaded " << frames.size()
-                      << " frames (" << frames[0].width << "x" << frames[0].height
-                      << ") from " << folder_path << "\n";
+                      << " frames (Native: " << native_w << "x" << native_h
+                      << " [" << native_label << "]) from " << folder_path << "\n";
         }
     }
 
-    uint32_t get_pixel(int active_x, int active_y, int active_w, int active_h) const {
+    uint32_t get_pixel(int target_x, int target_y, int active_dst_w, int active_dst_h) const {
         if (!loaded || frames.empty()) return 0;
 
         const auto& cur = frames[current_frame];
-        if (cur.pixels.empty()) return 0;
+        if (cur.pixels.empty() || cur.width <= 0 || cur.height <= 0) return 0;
 
         int sx, sy;
-        if (cur.width == active_w && cur.height == active_h) {
-            sx = active_x;
-            sy = active_y;
+        if (cur.width == active_dst_w && cur.height == active_dst_h) {
+            sx = target_x;
+            sy = target_y;
         } else {
-            sx = (active_x * cur.width) / (active_w > 0 ? active_w : 1);
-            sy = (active_y * cur.height) / (active_h > 0 ? active_h : 1);
+            // Proportional coordinate scaling across entire target display window
+            sx = (target_x * cur.width) / (active_dst_w > 0 ? active_dst_w : 1);
+            sy = (target_y * cur.height) / (active_dst_h > 0 ? active_dst_h : 1);
         }
 
         if (sx < 0) sx = 0;
@@ -232,7 +245,6 @@ private:
         size_t file_size = f.tellg();
         f.seekg(0, std::ios::beg);
 
-        // Detect resolution from file size
         int w = 0, h = 0;
         if (file_size == 640 * 480 * 3)       { w = 640;  h = 480; }
         else if (file_size == 1280 * 720 * 3)  { w = 1280; h = 720; }
@@ -265,7 +277,7 @@ int main(int argc, char** argv) {
     }
 
     SDL_Window* window = SDL_CreateWindow(
-        "Display Sink RTL - Interactive Multi-Video & Pattern Emulator",
+        "Display Sink RTL - Interactive Multi-Resolution & Rate Emulator",
         SDL_WINDOWPOS_CENTERED,
         SDL_WINDOWPOS_CENTERED,
         WIN_WIDTH,
@@ -282,11 +294,10 @@ int main(int argc, char** argv) {
     SDL_Renderer* renderer = SDL_CreateRenderer(
         window,
         -1,
-        SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC
+        SDL_RENDERER_ACCELERATED
     );
 
     if (!renderer) {
-        // Fallback to software renderer (e.g. software rasterizer or virtual display)
         renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
     }
 
@@ -297,27 +308,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // ARGB8888 streaming texture mapped to native 1080p panel
-    SDL_Texture* texture = SDL_CreateTexture(
-        renderer,
-        SDL_PIXELFORMAT_ARGB8888,
-        SDL_TEXTUREACCESS_STREAMING,
-        PANEL_WIDTH,
-        PANEL_HEIGHT
-    );
-
-    if (!texture) {
-        std::cerr << "[ERROR] SDL_CreateTexture failed: " << SDL_GetError() << std::endl;
-        SDL_DestroyRenderer(renderer);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        return 1;
-    }
-
-    // Framebuffer memory (1920 x 1080 32-bit ARGB)
-    std::vector<uint32_t> framebuffer(PANEL_WIDTH * PANEL_HEIGHT, 0xFF000000);
-
-    // Locate repository media folder (check ../media or ./media)
+    // Locate repository media folder
     std::string base_media = "media";
     if (!fs::exists(base_media)) {
         if (fs::exists("../media")) base_media = "../media";
@@ -334,11 +325,13 @@ int main(int argc, char** argv) {
     top->clk           = 0;
     top->rst_n         = 0;
     top->enable        = 0;
-    top->res_mode      = 0; // 480p default (upscaled to 1080p)
+    top->res_mode      = 1; // 720p initial target
+    top->src_res_mode  = 1; // 720p initial source
     top->rate_mode     = 3; // 60Hz default
     top->pat_mode      = 0; // SMPTE Color Bars default
     top->ext_video_rgb = 0;
-    top->ext_video_sel = 0; // 0 = Internal Pattern/Video stream
+    top->ext_video_sel = 0;
+    top->fast_sim_en   = 1; // Enable real-time 60 FPS simulation
     top->csc_enable    = 0; // RGB bypass
     top->gamma_mode    = 0; // Linear bypass
     top->dither_enable = 0; // Dither off
@@ -358,8 +351,38 @@ int main(int argc, char** argv) {
 
     DisplaySourceMode current_mode = MODE_COLORBARS;
 
+    // Active Texture & Dynamic Framebuffer dimensions
+    int cur_panel_w = 1280;
+    int cur_panel_h = 720;
+
+    SDL_Texture* texture = SDL_CreateTexture(
+        renderer,
+        SDL_PIXELFORMAT_ARGB8888,
+        SDL_TEXTUREACCESS_STREAMING,
+        cur_panel_w,
+        cur_panel_h
+    );
+
+    std::vector<uint32_t> framebuffer(cur_panel_w * cur_panel_h, 0xFF000000);
+
+    auto update_panel_dimensions = [&](int w, int h) {
+        if (cur_panel_w != w || cur_panel_h != h) {
+            cur_panel_w = w;
+            cur_panel_h = h;
+            if (texture) SDL_DestroyTexture(texture);
+            texture = SDL_CreateTexture(
+                renderer,
+                SDL_PIXELFORMAT_ARGB8888,
+                SDL_TEXTUREACCESS_STREAMING,
+                cur_panel_w,
+                cur_panel_h
+            );
+            framebuffer.assign(cur_panel_w * cur_panel_h, 0xFF000000);
+        }
+    };
+
     std::cout << "=================================================================\n";
-    std::cout << " Display Sink RTL - Interactive Multi-Video & Pattern Emulator   \n";
+    std::cout << " Display Sink RTL - Interactive Multi-Resolution & Rate Emulator   \n";
     std::cout << "=================================================================\n";
     std::cout << " Display Source Toggles (6 Options):\n";
     std::cout << "   [F1] / [KP1] : Mode 1 - SMPTE 8-Bar Color Bars (Hardware Built-in)\n";
@@ -369,42 +392,82 @@ int main(int argc, char** argv) {
     std::cout << "   [F5] / [KP5] : Mode 5 - Custom Video 1 (media/video1/)\n";
     std::cout << "   [F6] / [KP6] : Mode 6 - Custom Video 2 (media/video2/)\n";
     std::cout << "   [V]  / [P]   : Cycle through all 6 Display Modes sequentially\n";
-    std::cout << " Pipeline Controls:\n";
-    std::cout << "   [1] 480p (Upscaled) | [2] 720p (Upscaled) | [3] 1080p (Native)\n";
-    std::cout << "   [4] 24 Hz | [5] 30 Hz | [6] 45 Hz | [7] 60 Hz\n";
-    std::cout << "   [C] Toggle Color Space Conversion (RGB <-> YCbCr)\n";
-    std::cout << "   [G] Cycle Gamma Mode (Linear -> Gamma 2.2 -> sRGB)\n";
-    std::cout << "   [D] Toggle Spatial/Temporal Dithering (Bayer 2x2)\n";
-    std::cout << "   [R] Rescan & Reload Custom Video folders\n";
+    std::cout << " Hardware Display Resolution Controls (1:1 Native, Upscaling, Downscaling):\n";
+    std::cout << "   [1] 480p Display  (640x480 active)\n";
+    std::cout << "   [2] 720p Display  (1280x720 active)\n";
+    std::cout << "   [3] 1080p Display (1920x1080 active)\n";
+    std::cout << " Refresh Rate Cadence:\n";
+    std::cout << "   [4] 24 Hz (Cinema) | [5] 30 Hz | [6] 45 Hz | [7] 60 Hz (Smooth Motion)\n";
+    std::cout << " Pipeline Modifiers:\n";
+    std::cout << "   [C] Toggle CSC (RGB <-> YCbCr) | [G] Cycle Gamma | [D] Toggle Dither\n";
+    std::cout << "   [R] Rescan & Reload custom video folders\n";
     std::cout << "   [ESC] / [Q] Quit\n";
     std::cout << "=================================================================\n";
+
+    auto print_scaling_status = [&]() {
+        const char* res_names[] = { "480p SD", "720p HD", "1080p FHD" };
+        std::string src_desc;
+        if (current_mode == MODE_VIDEO1 && video1.loaded) {
+            src_desc = "Custom Video 1 [" + video1.native_label + "]";
+        } else if (current_mode == MODE_VIDEO2 && video2.loaded) {
+            src_desc = "Custom Video 2 [" + video2.native_label + "]";
+        } else {
+            src_desc = "Built-in Test Pattern";
+        }
+
+        std::string mode_desc;
+        if (top->src_res_mode == top->res_mode) {
+            mode_desc = "1:1 Native Passthrough";
+        } else if (top->src_res_mode < top->res_mode) {
+            mode_desc = "Upscaled";
+        } else {
+            mode_desc = "Downscaled";
+        }
+
+        std::cout << "[SCALING] Source: " << src_desc
+                  << " -> Target Display: " << res_names[top->res_mode]
+                  << " (" << mode_desc << ")\n";
+    };
 
     auto apply_mode = [&](DisplaySourceMode mode) {
         current_mode = mode;
         switch (mode) {
             case MODE_COLORBARS:
                 top->pat_mode = 0;
+                top->src_res_mode = top->res_mode;
                 std::cout << "[CONTROL] Mode 1: SMPTE 8-Bar Color Bars Active\n";
                 break;
             case MODE_GRAYSCALE:
                 top->pat_mode = 1;
+                top->src_res_mode = top->res_mode;
                 std::cout << "[CONTROL] Mode 2: 0-255 Horizontal Grayscale Ramp Active\n";
                 break;
             case MODE_GEOMETRY:
                 top->pat_mode = 2;
+                top->src_res_mode = top->res_mode;
                 std::cout << "[CONTROL] Mode 3: Calibration Geometry Grid Active\n";
                 break;
             case MODE_MOTION:
                 top->pat_mode = 3;
-                std::cout << "[CONTROL] Mode 4: High-Velocity Animated Motion Target Active\n";
+                top->src_res_mode = top->res_mode;
+                std::cout << "[CONTROL] Mode 4: Animated Motion Target Active\n";
                 break;
             case MODE_VIDEO1:
                 if (video1.loaded) {
                     top->pat_mode = 4;
+                    top->src_res_mode = video1.native_res_mode;
+                    // Match display resolution to native on initial selection
+                    top->res_mode = video1.native_res_mode;
+                    int target_w = (top->res_mode == 0) ? 640 : (top->res_mode == 1) ? 1280 : 1920;
+                    int target_h = (top->res_mode == 0) ? 480 : (top->res_mode == 1) ? 720 : 1080;
+                    update_panel_dimensions(target_w, target_h);
                     std::cout << "[CONTROL] Mode 5: Custom User Video 1 Active ("
-                              << video1.frames.size() << " frames loaded)\n";
+                              << video1.frames.size() << " frames, Native: "
+                              << video1.native_label << ")\n";
+                    print_scaling_status();
                 } else {
-                    top->pat_mode = 0; // Graceful fallback to colorbars
+                    top->pat_mode = 0;
+                    top->src_res_mode = top->res_mode;
                     std::cout << "[INFO] Mode 5: Custom Video 1 selected, but no frames found in media/video1/.\n";
                     std::cout << "       (Add videos via: python3 scripts/load_video.py <file> 1  OR  --demo 1)\n";
                     std::cout << "       Gracefully falling back to Default Pattern 1 (SMPTE Color Bars).\n";
@@ -413,10 +476,19 @@ int main(int argc, char** argv) {
             case MODE_VIDEO2:
                 if (video2.loaded) {
                     top->pat_mode = 5;
+                    top->src_res_mode = video2.native_res_mode;
+                    // Match display resolution to native on initial selection
+                    top->res_mode = video2.native_res_mode;
+                    int target_w = (top->res_mode == 0) ? 640 : (top->res_mode == 1) ? 1280 : 1920;
+                    int target_h = (top->res_mode == 0) ? 480 : (top->res_mode == 1) ? 720 : 1080;
+                    update_panel_dimensions(target_w, target_h);
                     std::cout << "[CONTROL] Mode 6: Custom User Video 2 Active ("
-                              << video2.frames.size() << " frames loaded)\n";
+                              << video2.frames.size() << " frames, Native: "
+                              << video2.native_label << ")\n";
+                    print_scaling_status();
                 } else {
-                    top->pat_mode = 0; // Graceful fallback to colorbars
+                    top->pat_mode = 0;
+                    top->src_res_mode = top->res_mode;
                     std::cout << "[INFO] Mode 6: Custom Video 2 selected, but no frames found in media/video2/.\n";
                     std::cout << "       (Add videos via: python3 scripts/load_video.py <file> 2  OR  --demo 2)\n";
                     std::cout << "       Gracefully falling back to Default Pattern 1 (SMPTE Color Bars).\n";
@@ -436,6 +508,8 @@ int main(int argc, char** argv) {
     int frame_counter = 0;
 
     while (running && !Verilated::gotFinish()) {
+        auto frame_start_time = std::chrono::steady_clock::now();
+
         // Handle User Input Events
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
@@ -489,19 +563,28 @@ int main(int argc, char** argv) {
                         apply_mode(current_mode);
                         break;
 
-                    // Resolution Switching
-                    case SDLK_1:
+                    // Target Display Resolution Switching
+                    case SDLK_1: {
                         top->res_mode = 0; // 480p
-                        std::cout << "[CONTROL] Resolution -> 480p (640x480 active, polyphase upscaled to 1080p)\n";
+                        update_panel_dimensions(640, 480);
+                        if (current_mode < MODE_VIDEO1) top->src_res_mode = 0;
+                        print_scaling_status();
                         break;
-                    case SDLK_2:
+                    }
+                    case SDLK_2: {
                         top->res_mode = 1; // 720p
-                        std::cout << "[CONTROL] Resolution -> 720p (1280x720 active, polyphase upscaled to 1080p)\n";
+                        update_panel_dimensions(1280, 720);
+                        if (current_mode < MODE_VIDEO1) top->src_res_mode = 1;
+                        print_scaling_status();
                         break;
-                    case SDLK_3:
+                    }
+                    case SDLK_3: {
                         top->res_mode = 2; // 1080p
-                        std::cout << "[CONTROL] Resolution -> 1080p (Native 1920x1080 passthrough)\n";
+                        update_panel_dimensions(1920, 1080);
+                        if (current_mode < MODE_VIDEO1) top->src_res_mode = 2;
+                        print_scaling_status();
                         break;
+                    }
 
                     // Refresh Rate Switching
                     case SDLK_4:
@@ -541,24 +624,38 @@ int main(int argc, char** argv) {
                         std::cout << "[CONTROL] Dithering / FRC -> " << (top->dither_enable ? "Enabled (Bayer 2x2)" : "Disabled") << "\n";
                         break;
 
+                    // Simulation Fidelity Mode Toggle (Real-Time Smooth 60 FPS vs Strict Physical Clock Cycle Emulation)
+                    case SDLK_s:
+                        top->fast_sim_en = !top->fast_sim_en;
+                        std::cout << "[SIMULATION FIDELITY] Mode -> "
+                                  << (top->fast_sim_en ? "High-Speed Real-Time Simulation (Smooth 24/30/45/60 FPS)"
+                                                       : "Strict Physical 150MHz Cycle-Accurate Clock Emulation")
+                                  << "\n";
+                        break;
+
                     default:
                         break;
                 }
             }
         }
 
-        // Active raster dimensions for current resolution mode
-        int active_w = (top->res_mode == 0) ? 640 : (top->res_mode == 1) ? 1280 : 1920;
-        int active_h = (top->res_mode == 0) ? 480 : (top->res_mode == 1) ? 720 : 1080;
+        // Active source and destination dimensions
+        int active_src_w = (top->src_res_mode == 0) ? 640 : (top->src_res_mode == 1) ? 1280 : 1920;
+        int active_src_h = (top->src_res_mode == 0) ? 480 : (top->src_res_mode == 1) ? 720 : 1080;
+
+        int active_dst_w = (top->res_mode == 0) ? 640 : (top->res_mode == 1) ? 1280 : 1920;
+        int active_dst_h = (top->res_mode == 0) ? 480 : (top->res_mode == 1) ? 720 : 1080;
+
+        update_panel_dimensions(active_dst_w, active_dst_h);
 
         // Simulate RTL Clocks until a full video frame is completed
         bool frame_done = false;
         while (!frame_done) {
-            // Provide external video pixel if current mode is Video 1 or 2
+            // Provide external video pixel if current mode is Video 1 or 2 (mapped to active destination display raster)
             if (current_mode == MODE_VIDEO1 && video1.loaded) {
-                top->ext_video_rgb = video1.get_pixel(top->cur_pixel_x, top->cur_pixel_y, active_w, active_h);
+                top->ext_video_rgb = video1.get_pixel(top->cur_pixel_x, top->cur_pixel_y, active_dst_w, active_dst_h);
             } else if (current_mode == MODE_VIDEO2 && video2.loaded) {
-                top->ext_video_rgb = video2.get_pixel(top->cur_pixel_x, top->cur_pixel_y, active_w, active_h);
+                top->ext_video_rgb = video2.get_pixel(top->cur_pixel_x, top->cur_pixel_y, active_dst_w, active_dst_h);
             }
 
             // Rising Edge
@@ -566,16 +663,19 @@ int main(int argc, char** argv) {
             top->eval();
 
             // Active Panel Pixel Capture into Framebuffer
-            if (top->panel_de) {
-                if (cur_x < PANEL_WIDTH && cur_y < PANEL_HEIGHT) {
+            // In strict hardware mode (fast_sim_en == 0), advance cur_x ONLY when cur_pixel_en is asserted,
+            // preventing refresh rate changes from altering line length or frame geometry!
+            bool pixel_valid = top->panel_de && (top->fast_sim_en || top->cur_pixel_en);
+            if (pixel_valid) {
+                if (cur_x < cur_panel_w && cur_y < cur_panel_h) {
                     uint32_t argb = 0xFF000000 |
                                     (static_cast<uint32_t>(top->panel_r) << 16) |
                                     (static_cast<uint32_t>(top->panel_g) << 8)  |
                                     (static_cast<uint32_t>(top->panel_b));
-                    framebuffer[cur_y * PANEL_WIDTH + cur_x] = argb;
+                    framebuffer[cur_y * cur_panel_w + cur_x] = argb;
                 }
                 cur_x++;
-            } else {
+            } else if (!top->panel_de) {
                 if (cur_x > 0) {
                     cur_x = 0;
                     cur_y++;
@@ -603,29 +703,53 @@ int main(int argc, char** argv) {
         }
 
         // Push Framebuffer to SDL2 Texture and Render Window
-        SDL_UpdateTexture(texture, nullptr, framebuffer.data(), PANEL_WIDTH * sizeof(uint32_t));
+        SDL_UpdateTexture(texture, nullptr, framebuffer.data(), cur_panel_w * sizeof(uint32_t));
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, texture, nullptr, nullptr);
         SDL_RenderPresent(renderer);
 
+        // Refresh Rate Cadence Pacing (Eliminates lag and matches target cadence)
+        int target_fps = (top->rate_mode == 0) ? 24 : (top->rate_mode == 1) ? 30 : (top->rate_mode == 2) ? 45 : 60;
+        double target_frame_ms = 1000.0 / target_fps;
+        auto frame_sim_time = std::chrono::steady_clock::now();
+        std::chrono::duration<double, std::milli> sim_elapsed = frame_sim_time - frame_start_time;
+
+        if (sim_elapsed.count() < target_frame_ms) {
+            SDL_Delay(static_cast<Uint32>(target_frame_ms - sim_elapsed.count()));
+        }
+
         frame_counter++;
         auto now = std::chrono::steady_clock::now();
         std::chrono::duration<double> elapsed = now - last_fps_time;
-        if (elapsed.count() >= 1.0) {
+        if (elapsed.count() >= 0.5) {
             double fps = frame_counter / elapsed.count();
 
-            const char* mode_labels[] = {
-                "SMPTE Bars", "Grayscale", "Geometry", "Motion",
-                video1.loaded ? "Video 1" : "Video 1 (Empty)",
-                video2.loaded ? "Video 2" : "Video 2 (Empty)"
-            };
-            const char* res_labels[] = { "480p->1080p", "720p->1080p", "1080p Native" };
-            const char* rate_labels[] = { "24Hz", "30Hz", "45Hz", "60Hz" };
+            std::string source_info;
+            if (current_mode == MODE_VIDEO1 && video1.loaded) {
+                source_info = "Video 1 [" + video1.native_label + "]";
+            } else if (current_mode == MODE_VIDEO2 && video2.loaded) {
+                source_info = "Video 2 [" + video2.native_label + "]";
+            } else {
+                const char* pat_names[] = { "SMPTE Bars", "Grayscale", "Geometry", "Motion", "Video 1 (Empty)", "Video 2 (Empty)" };
+                source_info = pat_names[current_mode];
+            }
 
-            std::string title = "Display Sink RTL [" + std::to_string(static_cast<int>(fps)) + " FPS] | Mode: "
-                              + mode_labels[current_mode] + " | "
-                              + res_labels[top->res_mode] + " @ "
-                              + rate_labels[top->rate_mode] + " | [F1..F6/V: Source, 1..3: Res, 4..7: Rate]";
+            const char* res_labels[] = { "480p", "720p", "1080p" };
+            std::string scale_label;
+            if (current_mode >= MODE_VIDEO1 && ((current_mode == MODE_VIDEO1 && video1.loaded) || (current_mode == MODE_VIDEO2 && video2.loaded))) {
+                if (top->src_res_mode == top->res_mode) scale_label = "1:1 Native";
+                else if (top->src_res_mode < top->res_mode) scale_label = "Upscaled";
+                else scale_label = "Downscaled";
+            } else {
+                scale_label = "Direct";
+            }
+
+            const char* rate_labels[] = { "24Hz", "30Hz", "45Hz", "60Hz" };
+            std::string sim_mode_str = top->fast_sim_en ? "Real-Time" : "Strict HW";
+            std::string title = "Display Sink RTL [" + std::to_string(static_cast<int>(fps + 0.5)) + " FPS, " + sim_mode_str + "] | "
+                              + source_info + " -> "
+                              + res_labels[top->res_mode] + " (" + scale_label + ") @ "
+                              + rate_labels[top->rate_mode] + " | [1..3: Res, 4..7: Rate, S: Mode, F1..F6/V: Source]";
             SDL_SetWindowTitle(window, title.c_str());
             frame_counter = 0;
             last_fps_time = now;
@@ -633,7 +757,7 @@ int main(int argc, char** argv) {
     }
 
     // Cleanup Resources
-    SDL_DestroyTexture(texture);
+    if (texture) SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
