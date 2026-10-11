@@ -26,7 +26,7 @@ module horizontal_scaler (
   // For 640  -> 1920: (640 / 1920)  * 65536 = 21845 (16'h5555)
   // For 1280 -> 1920: (1280 / 1920) * 65536 = 43691 (16'hAAAA)
   // For Passthrough : 65536 (16'h0000 with carry)
-  input  logic [15:0] phase_step,
+  input  logic [19:0] phase_step,
   input  logic [11:0] dst_width,
 
   // Output Horizontally-Scaled Stream
@@ -80,7 +80,7 @@ module horizontal_scaler (
   logic [27:0] phase_acc; // [27:16] = integer pixel index, [15:12] = phase index
   logic [3:0]  sub_phase;
 
-  assign rd_addr   = phase_acc[27:16];
+  assign rd_addr   = (phase_acc[27:16] < 12'd2047) ? phase_acc[26:16] : 11'd2047;
   assign sub_phase = phase_acc[15:12];
 
   // Polyphase coefficients for current phase
@@ -136,7 +136,7 @@ module horizontal_scaler (
             out_x_cnt <= 12'd0;
           end else begin
             out_x_cnt <= out_x_cnt + 12'd1;
-            phase_acc <= phase_acc + {12'd0, phase_step};
+            phase_acc <= phase_acc + {8'd0, phase_step};
             out_de    <= 1'b1;
           end
         end

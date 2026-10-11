@@ -26,7 +26,7 @@ module vertical_scaler (
   // For 480  -> 1080: (480 / 1080)  * 65536 = 29127 (16'h71C7)
   // For 720  -> 1080: (720 / 1080)  * 65536 = 43691 (16'hAAAA)
   // For Passthrough : 65536
-  input  logic [15:0] v_step,
+  input  logic [19:0] v_step,
   input  logic [11:0] dst_height,
   input  logic [11:0] dst_width,
 
