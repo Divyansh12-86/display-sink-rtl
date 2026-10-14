@@ -1,0 +1,336 @@
+
+21. Printing statistics.
+
+=== $paramod$4157c713a80291f9fb2ffd7dae06bd593036ac03\dp_ram_line_buffer ===
+
+   Number of wires:              13857
+   Number of wire bits:          25718
+   Number of public wires:         519
+   Number of public wire bits:   12357
+   Number of memories:               0
+   Number of memory bits:            0
+   Number of processes:              0
+   Number of cells:              25673
+     $_ANDNOT_                     512
+     $_DFFE_PP_                  12312
+     $_MUX_                      12264
+     $_NAND_                         4
+     $_NOT_                          1
+     $_ORNOT_                        8
+     $_OR_                         572
+
+=== $paramod$d95cc534502135940de8931c44f684eef756af28\dp_ram_line_buffer ===
+
+   Number of wires:              55395
+   Number of wire bits:         102588
+   Number of public wires:        2055
+   Number of public wire bits:   49225
+   Number of memories:               0
+   Number of memory bits:            0
+   Number of processes:              0
+   Number of cells:             102539
+     $_ANDNOT_                    2048
+     $_DFFE_PP_                  49176
+     $_MUX_                      49128
+     $_NAND_                         4
+     $_NOT_                          3
+     $_ORNOT_                        8
+     $_OR_                        2172
+
+=== axis_video_rx ===
+
+   Number of wires:                140
+   Number of wire bits:            228
+   Number of public wires:          18
+   Number of public wire bits:     106
+   Number of memories:               0
+   Number of memory bits:            0
+   Number of processes:              0
+   Number of cells:                197
+     $_ANDNOT_                      50
+     $_AND_                          2
+     $_DFFE_PN0P_                   75
+     $_MUX_                          2
+     $_NAND_                        12
+     $_NOR_                          2
+     $_NOT_                          3
+     $_ORNOT_                        8
+     $_OR_                          21
+     $_XNOR_                         2
+     $_XOR_                         20
+
+=== color_top ===
+
+   Number of wires:                 33
+   Number of wire bits:            171
+   Number of public wires:          33
+   Number of public wire bits:     171
+   Number of memories:               0
+   Number of memory bits:            0
+   Number of processes:              0
+   Number of cells:                  3
+     csc_matrix                      1
+     dither_frc                      1
+     gamma_lut                       1
+
+=== csc_matrix ===
+
+   Number of wires:               2464
+   Number of wire bits:           2824
+   Number of public wires:          42
+   Number of public wire bits:     402
+   Number of memories:               0
+   Number of memory bits:            0
+   Number of processes:              0
+   Number of cells:               2578
+     $_ANDNOT_                     764
+     $_AND_                         91
+     $_DFFE_PN0P_                  156
+     $_MUX_                         67
+     $_NAND_                        16
+     $_NOR_                         90
+     $_NOT_                        102
+     $_ORNOT_                       92
+     $_OR_                         335
+     $_XNOR_                       171
+     $_XOR_                        694
+
+=== display_sink_top ===
+
+   Number of wires:                 67
+   Number of wire bits:            344
+   Number of public wires:          67
+   Number of public wire bits:     344
+   Number of memories:               0
+   Number of memory bits:            0
+   Number of processes:              0
+   Number of cells:                 60
+     $_DFF_PN0_                      2
+     $_MUX_                         53
+     axis_video_rx                   1
+     color_top                       1
+     pattern_generator_live          1
+     scaler_top                      1
+     tcon_timing_fsm                 1
+
+=== dither_frc ===
+
+   Number of wires:                174
+   Number of wire bits:            293
+   Number of public wires:          25
+   Number of public wire bits:     144
+   Number of memories:               0
+   Number of memory bits:            0
+   Number of processes:              0
+   Number of cells:                176
+     $_ANDNOT_                      17
+     $_AND_                         10
+     $_DFFE_PN0P_                   27
+     $_MUX_                         45
+     $_NAND_                         9
+     $_NOR_                          1
+     $_ORNOT_                        6
+     $_OR_                          31
+     $_XNOR_                         7
+     $_XOR_                         23
+
+=== gamma_lut ===
+
+   Number of wires:               1219
+   Number of wire bits:           1325
+   Number of public wires:          22
+   Number of public wire bits:     107
+   Number of memories:               0
+   Number of memory bits:            0
+   Number of processes:              0
+   Number of cells:               1245
+     $_ANDNOT_                     164
+     $_AND_                         15
+     $_DFFE_PN0P_                   27
+     $_MUX_                        816
+     $_NAND_                        15
+     $_NOR_                         16
+     $_NOT_                         24
+     $_ORNOT_                        6
+     $_OR_                         141
+     $_XNOR_                         9
+     $_XOR_                         12
+
+=== horizontal_scaler ===
+
+   Number of wires:               9135
+   Number of wire bits:           9851
+   Number of public wires:          68
+   Number of public wire bits:     726
+   Number of memories:               0
+   Number of memory bits:            0
+   Number of processes:              0
+   Number of cells:               9351
+     $_ANDNOT_                    3421
+     $_AND_                        217
+     $_DFFE_PN0P_                  196
+     $_DFFE_PN1P_                    9
+     $_MUX_                        374
+     $_NAND_                       249
+     $_NOR_                        368
+     $_NOT_                        292
+     $_ORNOT_                      193
+     $_OR_                        1322
+     $_XNOR_                       811
+     $_XOR_                       1890
+     $paramod$4157c713a80291f9fb2ffd7dae06bd593036ac03\dp_ram_line_buffer      8
+     polyphase_coeff_rom             1
+
+=== pattern_generator_live ===
+
+   Number of wires:               4043
+   Number of wire bits:           4292
+   Number of public wires:          29
+   Number of public wire bits:     238
+   Number of memories:               0
+   Number of memory bits:            0
+   Number of processes:              0
+   Number of cells:               4080
+     $_ANDNOT_                    1331
+     $_AND_                         94
+     $_DFFE_PN0P_                   41
+     $_DFFE_PN1P_                    6
+     $_DFF_PN0_                      1
+     $_MUX_                        357
+     $_NAND_                       139
+     $_NOR_                        331
+     $_NOT_                        226
+     $_ORNOT_                      171
+     $_OR_                         422
+     $_XNOR_                       303
+     $_XOR_                        658
+
+=== polyphase_coeff_rom ===
+
+   Number of wires:                 60
+   Number of wire bits:             99
+   Number of public wires:           5
+   Number of public wire bits:      44
+   Number of memories:               0
+   Number of memory bits:            0
+   Number of processes:              0
+   Number of cells:                 82
+     $_ANDNOT_                       9
+     $_AND_                          1
+     $_MUX_                         54
+     $_NAND_                         1
+     $_NOR_                          1
+     $_NOT_                          3
+     $_ORNOT_                        2
+     $_OR_                          10
+     $_XOR_                          1
+
+=== scaler_top ===
+
+   Number of wires:                 64
+   Number of wire bits:            214
+   Number of public wires:          34
+   Number of public wire bits:     184
+   Number of memories:               0
+   Number of memory bits:            0
+   Number of processes:              0
+   Number of cells:                 83
+     $_ANDNOT_                      27
+     $_AND_                          2
+     $_MUX_                         27
+     $_NAND_                         1
+     $_NOR_                          4
+     $_NOT_                          3
+     $_ORNOT_                        6
+     $_OR_                           9
+     $_XNOR_                         1
+     $_XOR_                          1
+     horizontal_scaler               1
+     vertical_scaler                 1
+
+=== tcon_timing_fsm ===
+
+   Number of wires:                974
+   Number of wire bits:           1328
+   Number of public wires:          22
+   Number of public wire bits:     282
+   Number of memories:               0
+   Number of memory bits:            0
+   Number of processes:              0
+   Number of cells:               1136
+     $_ANDNOT_                     435
+     $_AND_                         41
+     $_DFFE_PN0P_                   62
+     $_DFFE_PN1P_                    1
+     $_DFF_PN0_                     34
+     $_NAND_                        78
+     $_NOR_                         43
+     $_NOT_                         41
+     $_ORNOT_                       35
+     $_OR_                         184
+     $_XNOR_                        20
+     $_XOR_                        162
+
+=== vertical_scaler ===
+
+   Number of wires:               4727
+   Number of wire bits:           5278
+   Number of public wires:          59
+   Number of public wire bits:     559
+   Number of memories:               0
+   Number of memory bits:            0
+   Number of processes:              0
+   Number of cells:               4863
+     $_ANDNOT_                    1642
+     $_AND_                        154
+     $_DFFE_PN0P_                  158
+     $_MUX_                        222
+     $_NAND_                       173
+     $_NOR_                        446
+     $_NOT_                        220
+     $_ORNOT_                      126
+     $_OR_                         526
+     $_XNOR_                       503
+     $_XOR_                        690
+     $paramod$d95cc534502135940de8931c44f684eef756af28\dp_ram_line_buffer      3
+
+=== design hierarchy ===
+
+   display_sink_top                  1
+     axis_video_rx                   1
+     color_top                       1
+       csc_matrix                    1
+       dither_frc                    1
+       gamma_lut                     1
+     pattern_generator_live          1
+     scaler_top                      1
+       horizontal_scaler             1
+         $paramod$4157c713a80291f9fb2ffd7dae06bd593036ac03\dp_ram_line_buffer      8
+         polyphase_coeff_rom         1
+       vertical_scaler               1
+         $paramod$d95cc534502135940de8931c44f684eef756af28\dp_ram_line_buffer      3
+     tcon_timing_fsm                 1
+
+   Number of wires:             300141
+   Number of wire bits:         539755
+   Number of public wires:       10741
+   Number of public wire bits:  249838
+   Number of memories:               0
+   Number of memory bits:            0
+   Number of processes:              0
+   Number of cells:             536833
+     $_ANDNOT_                   18100
+     $_AND_                        627
+     $_DFFE_PN0P_                  742
+     $_DFFE_PN1P_                   16
+     $_DFFE_PP_                 246024
+     $_DFF_PN0_                     37
+     $_MUX_                     247513
+     $_NAND_                       737
+     $_NOR_                       1302
+     $_NOT_                        931
+     $_ORNOT_                      733
+     $_OR_                       14093
+     $_XNOR_                      1827
+     $_XOR_                       4151
+

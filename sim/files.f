@@ -4,10 +4,12 @@
 +incdir+../rtl/pattern
 +incdir+../rtl/scaler
 +incdir+../rtl/color
++incdir+../rtl/csr
 +incdir+../rtl/top
 +incdir+../models
 
 ../rtl/common/display_pkg.sv
+../rtl/common/display_sva.sv
 ../rtl/common/dp_ram_line_buffer.sv
 ../rtl/pattern/pattern_generator_live.sv
 ../rtl/tcon/tcon_timing_fsm.sv
@@ -20,6 +22,7 @@
 ../rtl/color/gamma_lut.sv
 ../rtl/color/dither_frc.sv
 ../rtl/color/color_top.sv
+../rtl/csr/display_sink_csr.sv
 ../rtl/top/axis_video_rx.sv
 ../rtl/top/display_sink_top.sv
 ../models/behavioral_phy_rx.sv

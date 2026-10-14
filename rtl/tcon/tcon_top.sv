@@ -7,8 +7,14 @@
 
 `timescale 1ns / 1ps
 
+`ifdef YOSYS
+`include "display_defs.vh"
+`endif
+
 module tcon_top
+`ifndef YOSYS
   import display_pkg::*;
+`endif
 (
   input  logic          clk,
   input  logic          rst_n,
@@ -16,6 +22,7 @@ module tcon_top
   input  rate_mode_e    rate_mode,
   input  pattern_mode_e pat_mode,
   input  logic [23:0]   ext_video_rgb,
+  input  logic          fast_sim_en,
   input  logic          enable,
 
   // Stream status
@@ -66,6 +73,7 @@ module tcon_top
     .res_mode    (res_mode),
     .rate_mode   (rate_mode),
     .enable      (enable),
+    .fast_sim_en (fast_sim_en),
     .pixel_en    (cur_en),
     .pixel_x     (cur_x),
     .pixel_y     (cur_y),

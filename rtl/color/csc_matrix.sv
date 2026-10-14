@@ -72,10 +72,16 @@ module csc_matrix (
       c1_p1     <= in_c1;
       c2_p1     <= in_c2;
 
-      // Studio offsets: Y has 16 offset; Cb and Cr have 128 offset
-      y_sub  <= $signed({8'd0, in_c0}) - 16'sd16;
-      cb_sub <= $signed({8'd0, in_c1}) - 16'sd128;
-      cr_sub <= $signed({8'd0, in_c2}) - 16'sd128;
+      // Low-power operand isolation: gate inputs when csc_enable is inactive
+      if (csc_enable) begin
+        y_sub  <= $signed({8'd0, in_c0}) - 16'sd16;
+        cb_sub <= $signed({8'd0, in_c1}) - 16'sd128;
+        cr_sub <= $signed({8'd0, in_c2}) - 16'sd128;
+      end else begin
+        y_sub  <= '0;
+        cb_sub <= '0;
+        cr_sub <= '0;
+      end
     end
   end
 
@@ -106,22 +112,31 @@ module csc_matrix (
       c1_p2     <= c1_p1;
       c2_p2     <= c2_p1;
 
-      r_mult <= (y_sub * C_Y_COEFF) + (cr_sub * C_R_CR);
-      g_mult <= (y_sub * C_Y_COEFF) - (cr_sub * C_G_CR) - (cb_sub * C_G_CB);
-      b_mult <= (y_sub * C_Y_COEFF) + (cb_sub * C_B_CB);
+      // Low-power operand isolation: gate multipliers when csc is disabled
+      if (csc_en_p1) begin
+        r_mult <= (y_sub * C_Y_COEFF) + (cr_sub * C_R_CR);
+        g_mult <= (y_sub * C_Y_COEFF) - (cr_sub * C_G_CR) - (cb_sub * C_G_CB);
+        b_mult <= (y_sub * C_Y_COEFF) + (cb_sub * C_B_CB);
+      end else begin
+        r_mult <= '0;
+        g_mult <= '0;
+        b_mult <= '0;
+      end
     end
   end
 
   // Pipeline Stage 3: Clamping & Output Assignment
   function automatic logic [7:0] clamp_q8(input signed [31:0] val);
     logic signed [15:0] shifted;
-    shifted = val >>> 8; // Divide by 256
-    if (shifted < 16'sd0)
-      return 8'h00;
-    else if (shifted > 16'sd255)
-      return 8'hFF;
-    else
-      return shifted[7:0];
+    begin
+      shifted = val >>> 8; // Divide by 256
+      if (shifted < 16'sd0)
+        clamp_q8 = 8'h00;
+      else if (shifted > 16'sd255)
+        clamp_q8 = 8'hFF;
+      else
+        clamp_q8 = shifted[7:0];
+    end
   endfunction
 
   always_ff @(posedge clk or negedge rst_n) begin

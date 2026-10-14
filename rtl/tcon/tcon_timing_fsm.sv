@@ -7,14 +7,21 @@
 
 `timescale 1ns / 1ps
 
+`ifdef YOSYS
+`include "display_defs.vh"
+`endif
+
 module tcon_timing_fsm
+`ifndef YOSYS
   import display_pkg::*;
+`endif
 (
   input  logic        clk,          // System Clock (e.g. 150 MHz)
   input  logic        rst_n,        // Active-low asynchronous reset
   input  res_mode_e   res_mode,     // 480p, 720p, 1080p
   input  rate_mode_e  rate_mode,    // 24Hz, 30Hz, 45Hz, 60Hz
   input  logic        enable,       // Global raster enable
+  input  logic        fast_sim_en,  // 1 = High-speed real-time simulation (1 cycle per pixel)
 
   // Pixel Enable & Coordinate Outputs
   output logic        pixel_en,     // Single-cycle fractional clock enable
@@ -37,7 +44,74 @@ module tcon_timing_fsm
   // Dynamic Timing Parameters
   // ---------------------------------------------------------------------------
   timing_params_t params;
+
+`ifdef YOSYS
+  always_comb begin
+    case (res_mode)
+      RES_480P: begin
+        params.h_active = 12'd640;
+        params.h_front  = 12'd16;
+        params.h_sync   = 12'd96;
+        params.h_back   = 12'd48;
+        params.h_total  = 12'd800;
+        params.v_active = 12'd480;
+        params.v_front  = 12'd10;
+        params.v_sync   = 12'd2;
+        params.v_back   = 12'd33;
+        params.v_total  = 12'd525;
+        case (rate_mode)
+          RATE_24HZ: params.rate_step = 32'd288390710;
+          RATE_30HZ: params.rate_step = 32'd360488388;
+          RATE_45HZ: params.rate_step = 32'd540732582;
+          RATE_60HZ: params.rate_step = 32'd720976776;
+        endcase
+      end
+      RES_720P: begin
+        params.h_active = 12'd1280;
+        params.h_front  = 12'd110;
+        params.h_sync   = 12'd40;
+        params.h_back   = 12'd220;
+        params.h_total  = 12'd1650;
+        params.v_active = 12'd720;
+        params.v_front  = 12'd5;
+        params.v_sync   = 12'd5;
+        params.v_back   = 12'd20;
+        params.v_total  = 12'd750;
+        case (rate_mode)
+          RATE_24HZ: params.rate_step = 32'd850257744;
+          RATE_30HZ: params.rate_step = 32'd1062822180;
+          RATE_45HZ: params.rate_step = 32'd1594233271;
+          RATE_60HZ: params.rate_step = 32'd2125644361;
+        endcase
+      end
+      RES_1080P: begin
+        params.h_active = 12'd1920;
+        params.h_front  = 12'd88;
+        params.h_sync   = 12'd44;
+        params.h_back   = 12'd148;
+        params.h_total  = 12'd2200;
+        params.v_active = 12'd1080;
+        params.v_front  = 12'd4;
+        params.v_sync   = 12'd5;
+        params.v_back   = 12'd36;
+        params.v_total  = 12'd1125;
+        case (rate_mode)
+          RATE_24HZ: params.rate_step = 32'd1700515489;
+          RATE_30HZ: params.rate_step = 32'd2125644361;
+          RATE_45HZ: params.rate_step = 32'd3188466542;
+          RATE_60HZ: params.rate_step = 32'd4251288723;
+        endcase
+      end
+      default: begin
+        params.h_active = 12'd1920; params.h_front = 12'd88; params.h_sync = 12'd44; params.h_back = 12'd148; params.h_total = 12'd2200;
+        params.v_active = 12'd1080; params.v_front = 12'd4; params.v_sync = 12'd5; params.v_back = 12'd36; params.v_total = 12'd1125;
+        params.rate_step = 32'd4251288723;
+      end
+    endcase
+  end
+`else
   assign params = get_timing(res_mode, rate_mode);
+`endif
 
   // ---------------------------------------------------------------------------
   // Fractional Pixel Rate Accumulator (Fsys = 150.0 MHz)
@@ -50,8 +124,13 @@ module tcon_timing_fsm
       rate_acc <= 33'd0;
       pixel_en <= 1'b0;
     end else if (enable) begin
-      rate_acc <= {1'b0, rate_acc[31:0]} + {1'b0, params.rate_step};
-      pixel_en <= rate_acc[32];
+      if (fast_sim_en) begin
+        rate_acc <= 33'd0;
+        pixel_en <= 1'b1;
+      end else begin
+        rate_acc <= {1'b0, rate_acc[31:0]} + {1'b0, params.rate_step};
+        pixel_en <= rate_acc[32];
+      end
     end else begin
       rate_acc <= 33'd0;
       pixel_en <= 1'b0;

@@ -51,12 +51,14 @@ module dither_frc (
 
   // Helper function to dither channel
   function automatic logic [7:0] apply_dither(input logic [7:0] val, input logic [1:0] th);
-    if (val == 8'hFF)
-      return 8'hFF;
-    else if (val[1:0] > th)
-      return val + 8'd1;
-    else
-      return val;
+    begin
+      if (val == 8'hFF)
+        apply_dither = 8'hFF;
+      else if (val[1:0] > th)
+        apply_dither = val + 8'd1;
+      else
+        apply_dither = val;
+    end
   endfunction
 
   always_ff @(posedge clk or negedge rst_n) begin

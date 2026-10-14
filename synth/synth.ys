@@ -1,0 +1,37 @@
+# ==============================================================================
+# File: synth.ys
+# Description: Automated Yosys Synthesis Script
+# Target: display_sink_top (Full Master Subsystem)
+# ==============================================================================
+
+verilog_defines -DYOSYS
+
+read_verilog -sv -I../rtl/common -I../rtl/color ../rtl/common/dp_ram_line_buffer.sv
+read_verilog -sv -I../rtl/common -I../rtl/color ../rtl/pattern/pattern_generator_live.sv
+read_verilog -sv -I../rtl/common -I../rtl/color ../rtl/scaler/polyphase_coeff_rom.sv
+read_verilog -sv -I../rtl/common -I../rtl/color ../rtl/scaler/horizontal_scaler.sv
+read_verilog -sv -I../rtl/common -I../rtl/color ../rtl/scaler/vertical_scaler.sv
+read_verilog -sv -I../rtl/common -I../rtl/color ../rtl/scaler/scaler_top.sv
+read_verilog -sv -I../rtl/common -I../rtl/color ../rtl/color/csc_matrix.sv
+read_verilog -sv -I../rtl/common -I../rtl/color ../rtl/color/gamma_lut.sv
+read_verilog -sv -I../rtl/common -I../rtl/color ../rtl/color/dither_frc.sv
+read_verilog -sv -I../rtl/color ../rtl/color/color_top.sv
+read_verilog -sv -I../rtl/common -I../rtl/csr ../rtl/csr/display_sink_csr.sv
+read_verilog -sv -I../rtl/common -I../rtl/color ../rtl/tcon/tcon_timing_fsm.sv
+read_verilog -sv -I../rtl/common -I../rtl/color ../rtl/top/axis_video_rx.sv
+read_verilog -sv -I../rtl/common -I../rtl/color ../rtl/top/display_sink_top.sv
+
+hierarchy -check -top display_sink_top
+
+proc
+opt
+check -assert
+
+# Memory synthesis without unrolling huge arrays into registers
+memory -nomap
+opt
+
+# Synthesis & Technology Mapping
+synth -top display_sink_top
+
+tee -o ppa_report.txt stat
