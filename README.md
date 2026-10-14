@@ -47,10 +47,13 @@ To maintain strict industry design discipline, this repository partitions the sy
 ```
 display-sink-rtl/
 ├── docs/
-│   └── display_sink_architecture_corrected.md    # Permanent technical reference specification
+│   ├── display_sink_architecture_corrected.md    # Permanent technical reference specification
+│   └── display_sink_uarch_spec.md                # Comprehensive micro-architecture specification
 ├── rtl/
 │   ├── common/
+│   │   ├── display_defs.vh                        # Synthesizable enums and timing param records
 │   │   ├── display_pkg.sv                         # Timing parameters, resolution/rate enums
+│   │   ├── display_sva.sv                         # SystemVerilog Assertions (SVA) monitor
 │   │   └── dp_ram_line_buffer.sv                  # Synthesizable dual-port circular line buffer
 │   ├── pattern/
 │   │   └── pattern_generator_live.sv              # Live multi-frame algorithmic motion generator
@@ -58,24 +61,41 @@ display-sink-rtl/
 │   │   ├── tcon_timing_fsm.sv                     # Glass timing generator (STV, CPV, OE, TP, POL)
 │   │   └── tcon_top.sv                            # T-CON module wrapper
 │   ├── scaler/
-│   │   ├── polyphase_coeff_rom.sv                 # Polyphase filter coefficients
-│   │   ├── horizontal_scaler.sv                   # Horizontal FIR scaling unit
-│   │   ├── vertical_scaler.sv                     # Vertical line-buffered FIR scaling unit
-│   │   └── scaler_top.sv                          # Complete 2D scaling engine
+│   │   ├── polyphase_coeff_rom.sv                 # 16-phase signed Catmull-Rom FIR coefficients
+│   │   ├── horizontal_scaler.sv                   # 4-bank interleaved 4-tap FIR horizontal scaler
+│   │   ├── vertical_scaler.sv                     # 3-line buffered bilinear vertical scaler
+│   │   └── scaler_top.sv                          # Bidirectional 2D spatial scaling engine
+│   ├── color/
+│   │   ├── csc_matrix.sv                          # BT.709 YCbCr->RGB with low-power isolation
+│   │   ├── gamma_rom_data.vh                      # Precomputed Gamma 2.2 and sRGB ROM functions
+│   │   ├── gamma_lut.sv                           # 256-entry exact 1D Gamma LUT
+│   │   ├── dither_frc.sv                          # Spatial 2x2 Bayer + Temporal frame inversion
+│   │   └── color_top.sv                           # Complete color processing pipeline
+│   ├── csr/
+│   │   └── display_sink_csr.sv                    # APB3/APB4 Memory-Mapped SoC CSR block
 │   └── top/
-│       └── display_sink_top.sv                    # Complete integrated sink controller
+│       ├── axis_video_rx.sv                       # AXI4-Stream video input receiver
+│       └── display_sink_top.sv                    # Complete integrated sink controller top
 ├── models/
 │   ├── behavioral_phy_rx.sv                       # Analog SerDes link receiver stub
 │   ├── behavioral_source_driver.sv                # Analog column DAC array model
 │   └── behavioral_pmic.sv                         # Display power management rail stub
+├── synth/
+│   ├── rtl.f                                      # Pure synthesizable RTL filelist
+│   ├── synth.ys                                   # Native Yosys synthesis script
+│   ├── synth_yosys.tcl                            # TCL synthesis script
+│   └── ppa_report.txt                             # Logic utilization and cell count report
 ├── tb/
-│   ├── tb_tcon.sv                                 # Glass timing verification
-│   ├── tb_pattern.sv                              # Live motion feed testbench
-│   ├── tb_scaler.sv                               # Scaler resolution verification
-│   └── tb_top.sv                                  # End-to-end multi-rate integration testbench
+│   ├── tb_pattern.sv                              # Pattern generator self-checking testbench
+│   ├── tb_tcon.sv                                 # 12-mode glass timing verification
+│   ├── tb_scaler.sv                               # 2D spatial scaler self-checking testbench
+│   ├── tb_color.sv                                # BT.709 CSC, Gamma ROM & Dither testbench
+│   ├── tb_csr.sv                                  # SoC APB CSR register self-checking testbench
+│   ├── tb_top.sv                                  # End-to-end multi-rate integration testbench
+│   └── tb_crv_top.sv                              # Constrained-random & SVA coverage testbench
 ├── sim/
-│   ├── Makefile                                   # Automated build (Verilator & QuestaSim)
-│   └── files.f                                    # Master Verilog filelist
+│   ├── Makefile                                   # Automated build & regression Makefile
+│   └── files.f                                    # Master simulation filelist
 └── README.md
 ```
 
@@ -199,29 +219,53 @@ While running `make view`, the following hotkeys control the hardware pipeline i
 
 ---
 
-## 7. Verification & Simulation Targets
+## 7. Architectural Claims vs Verification Evidence Scorecard
 
-Run verification suites from the `sim/` directory:
+The following scorecard documents every architectural capability implemented in this repository, the corresponding implementation source, the testbench that verifies it, the reproduction command, and the pass status:
+
+| Architectural Claim / Capability | Engineering Specification | Implementation File | Verification Testbench | Reproduction Command | Pass Status |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| **12-Mode CTA-861 / VESA Timings** | Exact frame pixel & line bounds for 480p, 720p, 1080p @ 24, 30, 45, 60 Hz | [`rtl/tcon/tcon_timing_fsm.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/rtl/tcon/tcon_timing_fsm.sv) | [`tb/tb_tcon.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/tb/tb_tcon.sv) | `make -C sim sim-tcon` | **PASS (0 err)** |
+| **Glass Physical Timing Strobes** | Strict STV vertical frame pulse, CPV row clock, OE mask, TP_LOAD latch, POL polarity | [`rtl/tcon/tcon_timing_fsm.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/rtl/tcon/tcon_timing_fsm.sv) | [`tb/tb_tcon.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/tb/tb_tcon.sv) | `make -C sim sim-tcon` | **PASS (0 err)** |
+| **4-Tap Catmull-Rom FIR Scaler** | 16-phase signed 10-bit Q8 FIR, $\sum C_i=256$, 4-bank interleaved single-cycle SRAM | [`rtl/scaler/horizontal_scaler.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/rtl/scaler/horizontal_scaler.sv) | [`tb/tb_scaler.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/tb/tb_scaler.sv) | `make -C sim sim-scaler` | **PASS (0 err)** |
+| **Bidirectional 2D Spatial Scaling** | Full upscaling & downscaling (480p <-> 1080p, 720p <-> 1080p) + exact passthrough | [`rtl/scaler/scaler_top.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/rtl/scaler/scaler_top.sv) | [`tb/tb_scaler.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/tb/tb_scaler.sv) | `make -C sim sim-scaler` | **PASS (0 err)** |
+| **BT.709 Color Space Conversion** | Fixed-point Q8.8 studio YCbCr to linear RGB with low-power operand isolation | [`rtl/color/csc_matrix.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/rtl/color/csc_matrix.sv) | [`tb/tb_color.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/tb/tb_color.sv) | `make -C sim sim-color` | **PASS (0 err)** |
+| **Exact Gamma 2.2 & sRGB ROMs** | 256-entry precomputed non-linear transfer functions ($y=255\cdot(x/255)^\gamma$) | [`rtl/color/gamma_lut.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/rtl/color/gamma_lut.sv) | [`tb/tb_color.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/tb/tb_color.sv) | `make -C sim sim-color` | **PASS (0 err)** |
+| **Bayer 2x2 Spatial-Temporal Dither**| 10-to-8 bit dithering using 2x2 Bayer threshold matrix + odd/even frame inversion | [`rtl/color/dither_frc.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/rtl/color/dither_frc.sv) | [`tb/tb_color.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/tb/tb_color.sv) | `make -C sim sim-color` | **PASS (0 err)** |
+| **SoC APB Control & Telemetry (CSR)**| 32-bit APB slave register file, dynamic mode control, live coordinates, W1C IRQ | [`rtl/csr/display_sink_csr.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/rtl/csr/display_sink_csr.sv) | [`tb/tb_csr.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/tb/tb_csr.sv) | `make -C sim sim-csr` | **PASS (0 err)** |
+| **Formal SystemVerilog Assertions** | SVA for reset quiescence, AXI stability, no X/Z on DE, STV blanking, line width | [`rtl/common/display_sva.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/rtl/common/display_sva.sv) | [`tb/tb_crv_top.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/tb/tb_crv_top.sv) | `make -C sim sim-crv` | **PASS (0 violations)** |
+| **Constrained-Random Verification** | 50 randomized transaction iterations + systematic closure across 29 bins | [`tb/tb_crv_top.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/tb/tb_crv_top.sv) | [`tb/tb_crv_top.sv`](file:///home/divyansh/Verilog_Practice/display-sink-rtl/tb/tb_crv_top.sv) | `make -C sim sim-crv` | **PASS (100% coverage)** |
+| **Strict Static Lint Closure** | Verilator static analysis (-Wall) with zero waivers and zero warnings | Whole design | Verilator 5.020 | `make -C sim lint` | **PASS (0 warnings)** |
+| **Yosys Logic Synthesis & PPA** | Clean gate-level elaboration, zero latches inferred, PPA metrics recorded | Whole design | Yosys 0.33 | `make -C sim synth` | **PASS (0 latches)** |
+
+---
+
+## 8. Verification & Synthesis Commands
+
+Run all verification, regression, linting, and synthesis targets from the `sim/` directory:
 
 ```bash
 cd sim
 
-# 1. Run strict static linting (-Wall with zero warnings)
+# 1. Run Master Regression Suite (All 7 testbenches: Pattern, T-CON, Scaler, Color, CSR, Top, CRV)
+make regress
+
+# 2. Run strict static linting (-Wall with zero warnings)
 make lint
 
-# 2. Run T-CON glass timing verification (CTA-861 & VESA timings)
-make sim-questa
+# 3. Run individual module testbenches
+make sim-pattern  # Pattern generator linearity & motion
+make sim-tcon     # 12-mode glass timing & strobes
+make sim-scaler   # 2D 4-tap Catmull-Rom spatial scaler
+make sim-color    # BT.709 CSC, Gamma 2.2 / sRGB ROM, Bayer dither
+make sim-csr      # SoC APB CSR register subsystem
+make sim-top      # Top-level integration & behavioral models
+make sim-crv      # Constrained-random & SVA functional coverage (100% closed)
 
-# 3. Run 2D polyphase scaler verification (480p/720p -> 1080p)
-make sim-scaler
+# 4. Run open-source logic synthesis and PPA characterization
+make synth
 
-# 4. Run Color, Gamma LUT & Dither FRC verification
-make sim-color
-
-# 5. Run Master Top-Level end-to-end integration regression
-make sim-top
-
-# 6. Launch real-time SDL2 interactive graphical emulator
+# 5. Launch real-time interactive graphical emulator (Verilator + SDL2)
 make view
 ```
 
